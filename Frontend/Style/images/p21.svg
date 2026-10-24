@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="grad_21" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181b" />
+      <stop offset="100%" stop-color="#ef4444" />
+    </linearGradient>
+    <filter id="shadow_21" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="rgba(0,0,0,0.35)" />
+    </filter>
+  </defs>
+  
+  <rect width="400" height="400" fill="url(#grad_21)" />
+  
+  <g opacity="0.1">
+    <circle cx="80" cy="80" r="120" fill="#ffffff" />
+    <circle cx="340" cy="340" r="100" fill="#ffffff" />
+  </g>
+  
+  <rect x="40" y="40" width="320" height="320" rx="20" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.25)" stroke-width="2" filter="url(#shadow_21)" />
+  
+  <!-- Category Pill -->
+  <rect x="60" y="60" width="130" height="26" rx="13" fill="rgba(0,0,0,0.4)" />
+  <text x="125" y="77" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">SPORTS & FITNESS</text>
+  
+  <!-- Central Product Icon Illustration -->
+  <circle cx="200" cy="180" r="62" fill="rgba(255,255,255,0.22)" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" />
+  <text x="200" y="200" font-size="58" text-anchor="middle" dominant-baseline="central">🏋️</text>
+  
+  <!-- Product Title & Tagline -->
+  <text x="200" y="280" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-size="17" font-weight="800" fill="#ffffff" text-anchor="middle">Adjustable Dumbbells</text>
+  <text x="200" y="306" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-size="12" font-weight="500" fill="rgba(255,255,255,0.85)" text-anchor="middle">10kg Pair Neoprene</text>
+</svg>

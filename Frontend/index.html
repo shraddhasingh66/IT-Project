@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EasyCart — Online Shopping Storefront</title>
+    <link rel="icon" type="image/png" href="/banner/icon.png">
+    <link rel="shortcut icon" type="image/png" href="/banner/icon.png">
+    <link rel="apple-touch-icon" href="/banner/icon.png">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Top Utility Bar -->
+    <div class="top-announcement">
+        <div class="container announcement-inner">
+            <span>Festive Sale: Use coupon <strong>WELCOME10</strong> for 10% off | Free Delivery on orders over ₹999</span>
+            <div class="top-links">
+                <span id="delivery-location">Deliver to India</span>
+                <span class="divider">|</span>
+                <button type="button" class="theme-toggle-btn" id="theme-toggle" aria-label="Toggle theme">
+                    <span class="theme-icon" id="theme-icon">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    </span>
+                    <span id="theme-text">Dark Mode</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Navigation Header -->
+    <header class="main-header">
+        <div class="container header-container">
+            <!-- Brand -->
+            <a href="#" class="brand-logo" id="home-logo-btn">
+                <img src="/banner/EasyCart%20logo%20transparent.png" alt="EasyCart Logo" class="brand-logo-img">
+            </a>
+
+            <!-- Search Bar -->
+            <div class="search-container">
+                <div class="search-input-wrapper">
+                    <input type="text" id="global-search" placeholder="Search for electronics, fashion, groceries, books and more..." autocomplete="off">
+                    <button type="button" id="search-btn" class="search-action-btn" aria-label="Search">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Header Actions -->
+            <div class="header-actions">
+                <!-- Account Trigger -->
+                <div class="header-action-item">
+                    <button type="button" class="action-btn" id="header-account-btn" aria-label="Customer Account">
+                        <div class="action-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        </div>
+                        <div class="action-text">
+                            <span class="action-small" id="account-greeting">Hello, Sign In</span>
+                            <strong class="action-main" id="account-status-label">Account</strong>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Shopping Cart Trigger -->
+                <div class="header-action-item">
+                    <button type="button" class="action-btn cart-trigger-btn" id="header-cart-btn" aria-label="View Shopping Cart">
+                        <div class="action-icon cart-icon-box">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                            <span class="cart-badge" id="cart-badge">0</span>
+                        </div>
+                        <div class="action-text cart-action-text">
+                            <span class="action-small">Cart</span>
+                            <strong class="action-main" id="cart-total-header">₹0.00</strong>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Navigation Bar -->
+        <nav class="category-nav">
+            <div class="container category-container">
+                <button type="button" class="cat-pill active" data-category="All">
+                    All Products
+                </button>
+                <button type="button" class="cat-pill" data-category="Electronics">Electronics</button>
+                <button type="button" class="cat-pill" data-category="Grocery">Grocery</button>
+                <button type="button" class="cat-pill" data-category="Fashion">Fashion</button>
+                <button type="button" class="cat-pill" data-category="Home & Kitchen">Home & Kitchen</button>
+                <button type="button" class="cat-pill" data-category="Beauty & Personal Care">Beauty & Personal Care</button>
+                <button type="button" class="cat-pill" data-category="Books & Stationery">Books & Stationery</button>
+                <button type="button" class="cat-pill" data-category="Sports & Fitness">Sports & Fitness</button>
+                <button type="button" class="cat-pill" data-category="Toys & Accessories">Toys & Accessories</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Global Notification Banner -->
+    <div id="toast-notification" class="toast hidden">
+        <span id="toast-message"></span>
+        <button type="button" class="toast-close" onclick="closeToast()">&times;</button>
+    </div>
+
+    <!-- Main Storefront Content -->
+    <main class="store-main">
+        <div class="container">
+            <!-- Compact Promotional Banner -->
+            <section class="hero-banner">
+                <div class="banner-content">
+                    <span class="banner-tag">Limited Time Offers</span>
+                    <h2>Elevate Your Everyday Shopping</h2>
+                    <p>Flat 10% off on your first order with coupon <code>WELCOME10</code>. Use <code>SAVE50</code> for ₹50 off on orders over ₹499.</p>
+                    <div class="banner-coupons">
+                        <span class="coupon-chip" onclick="copyCouponCode('WELCOME10')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg> WELCOME10 (10% Off)</span>
+                        <span class="coupon-chip" onclick="copyCouponCode('SAVE50')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg> SAVE50 (₹50 Off)</span>
+                        <span class="coupon-chip" onclick="copyCouponCode('FREESHIP')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg> FREESHIP (Free Delivery)</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Category Banners Section (Full-Width Stacked) -->
+            <section class="category-banners" id="category-banners-section">
+                <div class="banners-stack">
+                    <!-- Electronics (Dark background -> Light text) -->
+                    <a href="javascript:void(0)" class="banner-card banner-theme-dark banner-pos-left" onclick="window.selectCategory('Electronics')">
+                        <img src="/banner/Electronics.png" alt="Electronics" class="banner-img"/>
+                        <div class="banner-overlay">
+                            <span class="banner-badge">Electronics Showcase</span>
+                            <h3 class="banner-heading">Electronics at the Best Prices</h3>
+                            <p class="banner-tagline">Smart technology. Smarter prices.</p>
+                            <span class="banner-explore-btn">Explore Category &rarr;</span>
+                        </div>
+                        <div class="banner-arrow">&#8594;</div>
+                    </a>
+
+                    <!-- Grocery (Light/Vibrant background -> Dark text) -->
+                    <a href="javascript:void(0)" class="banner-card banner-theme-light banner-pos-left" onclick="window.selectCategory('Grocery')">
+                        <img src="/banner/Grocery.png" alt="Grocery" class="banner-img"/>
+                        <div class="banner-overlay">
+                            <span class="banner-badge">Farm Fresh Daily</span>
+                            <h3 class="banner-heading">Fresh Groceries, Every Day</h3>
+                            <p class="banner-tagline">Farm-fresh goodness, delivered to your door.</p>
+                            <span class="banner-explore-btn">Explore Category &rarr;</span>
+                        </div>
+                        <div class="banner-arrow">&#8594;</div>
+                    </a>
+
+                    <!-- Fashion (Light/Vibrant background -> Dark text) -->
+                    <a href="javascript:void(0)" class="banner-card banner-theme-light banner-pos-left" onclick="window.selectCategory('Fashion')">
+                        <img src="/banner/Fashion.png" alt="Fashion" class="banner-img"/>
+                        <div class="banner-overlay">
+                            <span class="banner-badge">Trendsetters</span>
+                            <h3 class="banner-heading">Find Your Everyday Style</h3>
+                            <p class="banner-tagline">Fresh looks. Great prices. Your style.</p>
+                            <span class="banner-explore-btn">Explore Category &rarr;</span>
+                        </div>
+                        <div class="banner-arrow">&#8594;</div>
+                    </a>
+
+                    <!-- Home & Kitchen (Dark background -> Light text) -->
+                    <a href="javascript:void(0)" class="banner-card banner-theme-dark banner-pos-left" onclick="window.selectCategory('Home & Kitchen')">
+                        <img src="/banner/Home-Kitchen.png" alt="Home & Kitchen" class="banner-img"/>
+                        <div class="banner-overlay">
+                            <span class="banner-badge">Cozy Living</span>
+                            <h3 class="banner-heading">Make Your Space Feel Like Home</h3>
+                            <p class="banner-tagline">Everyday essentials for better living.</p>
+                            <span class="banner-explore-btn">Explore Category &rarr;</span>
+                        </div>
+                        <div class="banner-arrow">&#8594;</div>
+                    </a>
+
+                    <!-- Beauty & Personal Care (Dark background -> Light text) -->
+                    <a href="javascript:void(0)" class="banner-card banner-theme-dark banner-pos-left" onclick="window.selectCategory('Beauty & Personal Care')">
+                        <img src="/banner/Beauty.png" alt="Beauty & Personal Care" class="banner-img"/>
+                        <div class="banner-overlay">
+                            <span class="banner-badge">Self Care Essentials</span>
+                            <h3 class="banner-heading">Your Everyday Beauty Essentials</h3>
+                            <p class="banner-tagline">Feel good. Look your best.</p>
+                            <span class="banner-explore-btn">Explore Category &rarr;</span>
+                        </div>
+                        <div class="banner-arrow">&#8594;</div>
+                    </a>
+
+                    <!-- Books & Stationery (Dark background -> Light text) -->
+                    <a href="javascript:void(0)" class="banner-card banner-theme-dark banner-pos-left" onclick="window.selectCategory('Books & Stationery')">
+                        <img src="/banner/Books.png" alt="Books & Stationery" class="banner-img"/>
+                        <div class="banner-overlay">
+                            <span class="banner-badge">Knowledge &amp; Creativity</span>
+                            <h3 class="banner-heading">Make Every Idea Count</h3>
+                            <p class="banner-tagline">Everything you need to learn, create and grow.</p>
+                            <span class="banner-explore-btn">Explore Category &rarr;</span>
+                        </div>
+                        <div class="banner-arrow">&#8594;</div>
+                    </a>
+
+                    <!-- Sports & Fitness (Dark background -> Light text) -->
+                    <a href="javascript:void(0)" class="banner-card banner-theme-dark banner-pos-left" onclick="window.selectCategory('Sports & Fitness')">
+                        <img src="/banner/Fitness.png" alt="Sports & Fitness" class="banner-img"/>
+                        <div class="banner-overlay">
+                            <span class="banner-badge">Active Lifestyle</span>
+                            <h3 class="banner-heading">Move More. Achieve More.</h3>
+                            <p class="banner-tagline">Gear up for your next personal best.</p>
+                            <span class="banner-explore-btn">Explore Category &rarr;</span>
+                        </div>
+                        <div class="banner-arrow">&#8594;</div>
+                    </a>
+
+                    <!-- Toys & Accessories (Light background -> Dark text) -->
+                    <a href="javascript:void(0)" class="banner-card banner-theme-light banner-pos-left" onclick="window.selectCategory('Toys & Accessories')">
+                        <img src="/banner/Toys.png" alt="Toys & Accessories" class="banner-img"/>
+                        <div class="banner-overlay">
+                            <span class="banner-badge">Play &amp; Learn</span>
+                            <h3 class="banner-heading">Little Things, Big Smiles</h3>
+                            <p class="banner-tagline">Discover fun, creativity and everyday adventures.</p>
+                            <span class="banner-explore-btn">Explore Category &rarr;</span>
+                        </div>
+                        <div class="banner-arrow">&#8594;</div>
+                    </a>
+                </div>
+            </section>
+
+            <!-- Storefront Products View (Hidden Initially on Home Load) -->
+            <div id="storefront-products-view" class="storefront-products-view hidden">
+            <!-- Storefront Toolbar: Filters, Stats & Sorting -->
+            <section class="toolbar-section">
+                <div class="toolbar-left">
+                    <div class="toolbar-title-group">
+                        <button type="button" class="btn btn-sm btn-outline back-to-banners-btn" id="back-to-banners-btn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                            Back to Banners
+                        </button>
+                        <div>
+                            <h1 class="catalogue-title" id="current-catalogue-title">All Products</h1>
+                            <span class="product-count" id="product-count-display">Showing 0 products</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="toolbar-right">
+                    <!-- In-Stock Filter -->
+                    <label class="filter-checkbox-label">
+                        <input type="checkbox" id="instock-filter">
+                        <span>In-Stock Only</span>
+                    </label>
+
+                    <!-- Price Filter Dropdown -->
+                    <div class="price-range-wrapper">
+                        <select id="price-filter" class="form-select">
+                            <option value="all">All Prices</option>
+                            <option value="0-500">Under ₹500</option>
+                            <option value="500-1500">₹500 – ₹1,500</option>
+                            <option value="1500-5000">₹1,500 – ₹5,000</option>
+                            <option value="5000+">Above ₹5,000</option>
+                        </select>
+                    </div>
+
+                    <!-- Sort Selector -->
+                    <div class="sort-wrapper">
+                        <label for="sort-select">Sort by:</label>
+                        <select id="sort-select" class="form-select">
+                            <option value="default">Featured / Default</option>
+                            <option value="price_asc">Price: Low to High</option>
+                            <option value="price_desc">Price: High to Low</option>
+                            <option value="discount">Highest Discount</option>
+                            <option value="rating">Customer Rating</option>
+                            <option value="name">Product Name (A-Z)</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Product Grid -->
+            <section class="products-container">
+                <div id="product-grid" class="product-grid">
+                    <!-- Dynamically populated -->
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-category-state" class="empty-state hidden">
+                    <div class="empty-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </div>
+                    <h3>No products in this category yet</h3>
+                    <p>Explore other categories or check back later for new arrivals.</p>
+                    <button type="button" class="btn btn-outline" id="view-all-btn">Back to All Banners</button>
+                </div>
+                <div id="empty-products-state" class="empty-state hidden">
+                    <div class="empty-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </div>
+                    <h3>No products found</h3>
+                    <p>We couldn't find any products matching your selected criteria or search keyword.</p>
+                    <button type="button" class="btn btn-outline" id="reset-filters-btn">Reset All Filters</button>
+                </div>
+            </section>
+            </div><!-- /storefront-products-view -->
+        </div>
+    </main>
+
+    <!-- Product Detail Modal -->
+    <div id="product-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+        <div class="modal-card product-modal-card">
+            <button type="button" class="modal-close-btn" id="close-product-modal" aria-label="Close dialog">&times;</button>
+            <div class="product-detail-layout" id="product-detail-content">
+                <!-- Dynamically rendered -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Dedicated Shopping Cart View / Drawer -->
+    <div id="cart-drawer" class="drawer-overlay hidden">
+        <div class="drawer-container">
+            <div class="drawer-header">
+                <div class="drawer-title">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                    <h2>Shopping Cart (<span id="cart-drawer-count">0</span>)</h2>
+                </div>
+                <button type="button" class="drawer-close-btn" id="close-cart-btn" aria-label="Close cart">&times;</button>
+            </div>
+
+            <!-- Empty Cart -->
+            <div id="drawer-cart-empty" class="drawer-empty-state hidden">
+                <div class="empty-cart-illustration">
+                    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                </div>
+                <h3>Your Cart is Empty</h3>
+                <p>Looks like you haven't added anything to your cart yet. Explore our top products and exclusive deals.</p>
+                <button type="button" class="btn btn-primary" id="start-shopping-btn">Start Shopping</button>
+            </div>
+
+            <!-- Populated Cart Content -->
+            <div id="drawer-cart-content" class="drawer-body">
+                <!-- Cart Items List -->
+                <div class="cart-items-scroll" id="cart-items-container">
+                    <!-- Items rendered dynamically -->
+                </div>
+
+                <!-- Cart Summary & Offers Sidebar/Bottom -->
+                <div class="cart-checkout-pane">
+                    <!-- Coupon Application -->
+                    <div class="coupon-box">
+                        <label for="coupon-input" class="coupon-label">Have a Promotional Code?</label>
+                        <div class="coupon-input-group">
+                            <input type="text" id="coupon-input" placeholder="e.g. WELCOME10, SAVE50" uppercase>
+                            <button type="button" id="apply-coupon-btn" class="btn btn-secondary">Apply</button>
+                        </div>
+                        <div id="applied-coupon-pill" class="applied-coupon-pill hidden">
+                            <span id="applied-coupon-text"></span>
+                            <button type="button" id="remove-coupon-btn" title="Remove coupon">&times;</button>
+                        </div>
+                    </div>
+
+                    <!-- Available Demonstration Offers -->
+                    <div class="quick-offers">
+                        <span class="offers-heading">Available Offers:</span>
+                        <div class="offers-list">
+                            <div class="offer-item" onclick="applyCouponCode('WELCOME10')">
+                                <strong>WELCOME10</strong> — 10% Off (Min order ₹200)
+                            </div>
+                            <div class="offer-item" onclick="applyCouponCode('SAVE50')">
+                                <strong>SAVE50</strong> — Flat ₹50 Off (Min order ₹499)
+                            </div>
+                            <div class="offer-item" onclick="applyCouponCode('FREESHIP')">
+                                <strong>FREESHIP</strong> — Free Delivery (Min order ₹300)
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bill Breakdown -->
+                    <div class="cart-price-breakdown">
+                        <div class="breakdown-row">
+                            <span>Items Subtotal</span>
+                            <span id="summary-subtotal">₹0.00</span>
+                        </div>
+                        <div class="breakdown-row discount-row" id="summary-discount-row">
+                            <span>Discount Savings</span>
+                            <span id="summary-discount">-₹0.00</span>
+                        </div>
+                        <div class="breakdown-row">
+                            <span>Standard Delivery</span>
+                            <span id="summary-delivery">₹40.00</span>
+                        </div>
+                        <div class="breakdown-row total-row">
+                            <strong>Total Amount</strong>
+                            <strong id="summary-total" class="highlight-total">₹0.00</strong>
+                        </div>
+                        <p class="tax-note">All taxes included. Authentic brand warranty.</p>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="cart-actions-footer">
+                        <button type="button" id="proceed-checkout-btn" class="btn btn-success btn-block">
+                            Proceed to Checkout
+                        </button>
+                        <button type="button" id="clear-cart-btn" class="btn-text btn-clear-cart">
+                            Empty Cart
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Authentication Modal (Login / Register) -->
+    <div id="auth-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+        <div class="modal-card auth-modal-card">
+            <div class="auth-modal-header">
+                <div class="auth-tabs">
+                    <button type="button" class="auth-tab-btn active" id="tab-login-btn">Sign In</button>
+                    <button type="button" class="auth-tab-btn" id="tab-register-btn">Create Account</button>
+                </div>
+                <button type="button" class="modal-close-btn" id="close-auth-modal" aria-label="Close dialog">&times;</button>
+            </div>
+
+            <!-- Login Form Pane -->
+            <div id="login-pane" class="auth-pane">
+                <div class="auth-prompt-banner">
+                    <p>Sign in with any email to proceed with your EasyCart order.</p>
+                </div>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-email">Email Address</label>
+                        <input type="email" id="login-email" required placeholder="shraddha.singh@gmail.com" autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password (Optional / Any)</label>
+                        <input type="password" id="login-password" placeholder="Enter password (optional)" autocomplete="current-password">
+                    </div>
+                    <button type="submit" id="login-submit-btn" class="btn btn-primary btn-block">Sign In &amp; Continue</button>
+                </form>
+            </div>
+
+            <!-- Register Form Pane -->
+            <div id="register-pane" class="auth-pane hidden">
+                <div class="auth-prompt-banner">
+                    <p>Create your customer profile to track deliveries &amp; invoices.</p>
+                </div>
+                <form id="register-form">
+                    <div class="form-group">
+                        <label for="reg-name">Full Name</label>
+                        <input type="text" id="reg-name" required placeholder="Shraddha Singh">
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-email">Email Address</label>
+                        <input type="email" id="reg-email" required placeholder="shraddha.singh@gmail.com" autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-password">Password</label>
+                        <input type="password" id="reg-password" placeholder="Create a password" autocomplete="new-password">
+                    </div>
+                    <button type="submit" id="register-submit-btn" class="btn btn-primary btn-block">Register &amp; Continue</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Details Modal -->
+    <div id="account-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+        <div class="modal-card account-modal-card">
+            <div class="checkout-header">
+                <h2>Customer Profile</h2>
+                <button type="button" class="modal-close-btn" id="close-account-modal">&times;</button>
+            </div>
+            <div class="account-profile-content">
+                <div class="account-user-card">
+                    <div class="account-avatar" id="account-avatar-initials">SS</div>
+                    <div class="account-details">
+                        <h3 id="account-profile-name">Shraddha Singh</h3>
+                        <p id="account-profile-email">shraddha.singh@gmail.com</p>
+                        <span class="account-status-tag">Verified EasyCart Customer</span>
+                    </div>
+                </div>
+                <div class="account-actions-box">
+                    <button type="button" class="btn btn-outline" id="account-logout-btn">Log Out</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dedicated Checkout Flow Modal -->
+    <div id="checkout-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+        <div class="modal-card checkout-modal-card">
+            <div class="checkout-header">
+                <h2>Secure Checkout</h2>
+                <button type="button" class="modal-close-btn" id="close-checkout-modal">&times;</button>
+            </div>
+
+            <div class="checkout-grid">
+                <!-- Left: Shipping & Payment Form -->
+                <div class="checkout-form-column">
+                    <form id="checkout-form">
+                        <!-- Shipping Section -->
+                        <div class="checkout-step-section">
+                            <h3 class="step-title">1. Delivery Address</h3>
+                            <div class="form-row">
+                                <div class="form-group flex-1">
+                                    <label for="ship-name">Full Name *</label>
+                                    <input type="text" id="ship-name" required placeholder="Shraddha Singh">
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label for="ship-phone">Contact Phone *</label>
+                                    <input type="tel" id="ship-phone" required placeholder="+91 98765 43210">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="ship-email">Email Address *</label>
+                                <input type="email" id="ship-email" required placeholder="shraddha.singh@gmail.com">
+                            </div>
+                            <div class="form-group">
+                                <label for="ship-address">Street Address / House No *</label>
+                                <input type="text" id="ship-address" required placeholder="e.g. 124 Park Avenue, Suite 4B">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1">
+                                    <label for="ship-city">City *</label>
+                                    <input type="text" id="ship-city" required placeholder="e.g. Kolkata">
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label for="ship-state">State *</label>
+                                    <input type="text" id="ship-state" required placeholder="e.g. West Bengal">
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label for="ship-pin">PIN Code *</label>
+                                    <input type="text" id="ship-pin" required placeholder="e.g. 700001">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Demo Payment Method -->
+                        <div class="checkout-step-section">
+                            <h3 class="step-title">2. Select Payment Method (Demo Simulation)</h3>
+                            <div class="payment-options">
+                                <label class="payment-option-card">
+                                    <input type="radio" name="payment_method" value="Cash on Delivery (Demo)" checked>
+                                    <div class="payment-info">
+                                        <strong>Cash on Delivery (Simulated)</strong>
+                                        <small>Pay upon physical package arrival at your doorstep.</small>
+                                    </div>
+                                </label>
+                                <label class="payment-option-card">
+                                    <input type="radio" name="payment_method" value="Simulated UPI (Demo)">
+                                    <div class="payment-info">
+                                        <strong>Instant UPI / QR (Educational Demo)</strong>
+                                        <small>Fast simulated approval without entering banking credentials.</small>
+                                    </div>
+                                </label>
+                                <label class="payment-option-card">
+                                    <input type="radio" name="payment_method" value="Simulated Card (Demo)">
+                                    <div class="payment-info">
+                                        <strong>Debit / Credit Card (Test Gateway)</strong>
+                                        <small>Safe zero-transaction test order verification.</small>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="place-order-btn" class="btn btn-success btn-block btn-lg">
+                            Confirm & Place Order (<span id="checkout-btn-amount">₹0.00</span>)
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Right: Order Review Summary -->
+                <div class="checkout-review-column">
+                    <h3 class="step-title">Order Summary</h3>
+                    <div class="order-review-items" id="checkout-review-items">
+                        <!-- Dynamically populated -->
+                    </div>
+                    <div class="checkout-totals-box">
+                        <div class="breakdown-row">
+                            <span>Subtotal</span>
+                            <span id="checkout-subtotal">₹0.00</span>
+                        </div>
+                        <div class="breakdown-row" id="checkout-discount-row">
+                            <span>Discount</span>
+                            <span id="checkout-discount">-₹0.00</span>
+                        </div>
+                        <div class="breakdown-row">
+                            <span>Delivery</span>
+                            <span id="checkout-delivery">₹40.00</span>
+                        </div>
+                        <div class="breakdown-row total-row">
+                            <strong>Payable Amount</strong>
+                            <strong id="checkout-grand-total">₹0.00</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Confirmation & Printable Invoice Modal -->
+    <div id="invoice-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+        <div class="modal-card invoice-modal-card">
+            <div class="invoice-container" id="printable-invoice">
+                <div class="invoice-header">
+                    <div>
+                        <div class="invoice-brand">EasyCart</div>
+                        <p class="invoice-subtitle">Official Order Confirmation & Tax Receipt</p>
+                    </div>
+                    <div class="invoice-meta">
+                        <div class="order-badge">Confirmed</div>
+                        <p><strong>Order ID:</strong> <span id="inv-order-id">EC-000000</span></p>
+                        <p><strong>Date:</strong> <span id="inv-order-date">2026-10-23</span></p>
+                    </div>
+                </div>
+
+                <div class="invoice-parties">
+                    <div class="invoice-party-col">
+                        <h4>Billed & Shipped To:</h4>
+                        <p><strong id="inv-cust-name">Customer Name</strong></p>
+                        <p id="inv-cust-address">Street Address</p>
+                        <p id="inv-cust-city">City, State - PIN</p>
+                        <p>Phone: <span id="inv-cust-phone"></span> | Email: <span id="inv-cust-email"></span></p>
+                    </div>
+                    <div class="invoice-party-col">
+                        <h4>Payment Information:</h4>
+                        <p><strong>Method:</strong> <span id="inv-payment-method">Cash on Delivery (Demo)</span></p>
+                        <p><strong>Status:</strong> <span class="text-success">Paid / Verified</span></p>
+                        <p><strong>Fulfillment:</strong> EasyCart Standard Express</p>
+                    </div>
+                </div>
+
+                <table class="invoice-table">
+                    <thead>
+                        <tr>
+                            <th>Item Description</th>
+                            <th>Unit Price</th>
+                            <th>Qty</th>
+                            <th class="text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inv-items-body">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+
+                <div class="invoice-totals">
+                    <div class="invoice-totals-inner">
+                        <div class="breakdown-row">
+                            <span>Subtotal:</span>
+                            <span id="inv-subtotal">₹0.00</span>
+                        </div>
+                        <div class="breakdown-row" id="inv-discount-row">
+                            <span>Savings:</span>
+                            <span id="inv-discount">-₹0.00</span>
+                        </div>
+                        <div class="breakdown-row">
+                            <span>Delivery Charges:</span>
+                            <span id="inv-delivery">₹0.00</span>
+                        </div>
+                        <div class="breakdown-row total-row">
+                            <strong>Grand Total Paid:</strong>
+                            <strong id="inv-grand-total">₹0.00</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="invoice-footer">
+                    <p>Thank you for shopping with <strong>EasyCart</strong>! For support, reach out to support@easycart.local.</p>
+                </div>
+            </div>
+
+            <div class="invoice-actions no-print">
+                <button type="button" class="btn btn-outline" onclick="window.print()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>Print Invoice
+                </button>
+                <button type="button" class="btn btn-primary" id="invoice-continue-btn">Continue Shopping</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clean E-Commerce Footer -->
+    <footer class="main-footer">
+        <div class="container footer-grid">
+            <div class="footer-col brand-col">
+                <div class="brand-logo footer-logo">
+                    <img src="/banner/EasyCart%20logo%20transparent.png" alt="EasyCart Logo" class="brand-logo-img footer-logo-img">
+                </div>
+                <p>A modern e-commerce storefront delivering authentic products, trusted deals, and fast doorstep delivery across India.</p>
+                <div class="trust-badges">
+                    <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> 100% Secure Checkout</span>
+                    <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Fast Dispatch</span>
+                    <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> Genuine Brands</span>
+                </div>
+            </div>
+
+            <div class="footer-col">
+                <h4>Product Categories</h4>
+                <ul>
+                    <li><a href="#" onclick="selectCategory('Electronics'); return false;">Electronics</a></li>
+                    <li><a href="#" onclick="selectCategory('Grocery'); return false;">Grocery</a></li>
+                    <li><a href="#" onclick="selectCategory('Fashion'); return false;">Fashion</a></li>
+                    <li><a href="#" onclick="selectCategory('Home & Kitchen'); return false;">Home & Kitchen</a></li>
+                    <li><a href="#" onclick="selectCategory('Beauty & Personal Care'); return false;">Beauty & Personal Care</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-col">
+                <h4>More Categories</h4>
+                <ul>
+                    <li><a href="#" onclick="selectCategory('Books & Stationery'); return false;">Books & Stationery</a></li>
+                    <li><a href="#" onclick="selectCategory('Sports & Fitness'); return false;">Sports & Fitness</a></li>
+                    <li><a href="#" onclick="selectCategory('Toys & Accessories'); return false;">Toys & Accessories</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-col">
+                <h4>Demonstration Coupons</h4>
+                <div class="footer-coupons">
+                    <p><code>WELCOME10</code> — 10% Off</p>
+                    <p><code>SAVE50</code> — ₹50 Off Orders &gt; ₹499</p>
+                    <p><code>FREESHIP</code> — Free Delivery</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <div class="container footer-bottom-inner">
+                <p>© 2026 EasyCart Inc. Built with Python, Flask, SQLite, and Vanilla Web Technologies.</p>
+                <p>Educational Demonstration Platform — Zero Real Charges Incurred</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
