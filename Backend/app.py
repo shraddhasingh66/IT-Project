@@ -1,9 +1,10 @@
 import os
 import sys
 import json
-import sqlite3
 import random
 import logging
+import psycopg
+from psycopg.rows import dict_row
 from flask import Flask, render_template, jsonify, request, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -18,10 +19,29 @@ TEMPLATE_DIR = os.path.join(PROJECT_ROOT, 'Frontend')
 STATIC_DIR = os.path.join(PROJECT_ROOT, 'Frontend', 'Style')
 BANNER_DIR = os.path.join(PROJECT_ROOT, 'banner')
 DATA_FILE = os.path.join(BACKEND_DIR, 'products.json')
-DB_FILE = os.path.join(BACKEND_DIR, 'easycart.db')
+
+# ---------------------------------------------------------------------------
+# Database URL — required in production, optional locally for development
+# ---------------------------------------------------------------------------
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if not DATABASE_URL:
+    logger.warning(
+        "DATABASE_URL environment variable is not set. "
+        "Set it to your Supabase PostgreSQL connection string before deploying."
+    )
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR, static_url_path='/static')
-app.secret_key = os.environ.get('SECRET_KEY', 'easycart-secret-key-2026-development')
+
+# Secret key — MUST be set via environment variable in production
+_secret = os.environ.get('SECRET_KEY')
+if not _secret:
+    logger.warning(
+        "SECRET_KEY environment variable is not set. "
+        "Using a development-only fallback. Set a strong SECRET_KEY before deploying."
+    )
+    _secret = 'easycart-secret-key-2026-development'
+app.secret_key = _secret
 
 # Route to serve banner images with validation
 @app.route('/banner/<path:filename>')
@@ -410,25 +430,47 @@ SEED_PRODUCTS = [
     }
 ]
 
+# ---------------------------------------------------------------------------
+# PostgreSQL connection helper
+# ---------------------------------------------------------------------------
 def get_db():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+    """Return a psycopg connection with dict_row factory.
+
+    Uses the DATABASE_URL environment variable. Supabase direct connections
+    require SSL, so sslmode=require is enforced unless the URL already
+    contains an sslmode parameter.
+    """
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        raise RuntimeError(
+            "DATABASE_URL environment variable is not configured. "
+            "Set it to your Supabase PostgreSQL connection string."
+        )
+    # Ensure SSL is enabled for Supabase (add sslmode=require if missing)
+    if 'sslmode' not in db_url:
+        separator = '&' if '?' in db_url else '?'
+        db_url += f'{separator}sslmode=require'
+    conn = psycopg.connect(db_url, row_factory=dict_row)
     return conn
 
+# ---------------------------------------------------------------------------
+# Schema initialization — safe for repeated calls (idempotent)
+# ---------------------------------------------------------------------------
 def init_db():
+    """Create tables if they don't exist, run safe migrations, and seed data."""
     conn = get_db()
     cursor = conn.cursor()
 
     # Products Table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             category TEXT NOT NULL DEFAULT 'Electronics',
-            price REAL NOT NULL,
-            original_price REAL,
+            price DOUBLE PRECISION NOT NULL,
+            original_price DOUBLE PRECISION,
             quantity INTEGER NOT NULL DEFAULT 0,
-            rating REAL DEFAULT 4.5,
+            rating DOUBLE PRECISION DEFAULT 4.5,
             rating_count INTEGER DEFAULT 50,
             image TEXT,
             image_url TEXT,
@@ -437,15 +479,18 @@ def init_db():
     ''')
 
     # Migration: Ensure image_url column exists if table was created previously
-    try:
+    # PostgreSQL-compatible: check information_schema before ALTER
+    cursor.execute("""
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'products' AND column_name = 'image_url'
+    """)
+    if not cursor.fetchone():
         cursor.execute("ALTER TABLE products ADD COLUMN image_url TEXT")
-    except sqlite3.OperationalError:
-        pass # Column already exists
 
     # Users Table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
@@ -465,10 +510,10 @@ def init_db():
             city TEXT NOT NULL,
             state TEXT NOT NULL,
             postal_code TEXT NOT NULL,
-            subtotal REAL NOT NULL,
-            discount REAL NOT NULL DEFAULT 0,
-            delivery_fee REAL NOT NULL DEFAULT 0,
-            total REAL NOT NULL,
+            subtotal DOUBLE PRECISION NOT NULL,
+            discount DOUBLE PRECISION NOT NULL DEFAULT 0,
+            delivery_fee DOUBLE PRECISION NOT NULL DEFAULT 0,
+            total DOUBLE PRECISION NOT NULL,
             coupon_code TEXT,
             payment_method TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'Confirmed',
@@ -480,36 +525,44 @@ def init_db():
     # Order Items Table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS order_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             order_id TEXT NOT NULL,
             product_id INTEGER NOT NULL,
             product_name TEXT NOT NULL,
-            unit_price REAL NOT NULL,
+            unit_price DOUBLE PRECISION NOT NULL,
             quantity INTEGER NOT NULL,
-            total_price REAL NOT NULL,
+            total_price DOUBLE PRECISION NOT NULL,
             FOREIGN KEY (order_id) REFERENCES orders (id)
         )
     ''')
 
     conn.commit()
 
-    # Always ensure local SVG paths & direct image_url support are in DB
+    # Seed products safely — ON CONFLICT preserves admin-edited rows
     for p in SEED_PRODUCTS:
         img_url = p.get('image_url') or p.get('image')
         cursor.execute('''
-            INSERT OR REPLACE INTO products (id, name, category, price, original_price, quantity, rating, rating_count, image, image_url, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO products (id, name, category, price, original_price, quantity, rating, rating_count, image, image_url, description)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO NOTHING
         ''', (
             p['id'], p['name'], p['category'], p['price'], p['original_price'],
             p['quantity'], p['rating'], p['rating_count'], p.get('image', img_url), img_url, p['description']
         ))
 
+    # Ensure the serial sequence is ahead of our hardcoded IDs
+    cursor.execute("SELECT setval(pg_get_serial_sequence('products', 'id'), GREATEST((SELECT MAX(id) FROM products), 1))")
+
     conn.commit()
     sync_json_from_db(conn)
     conn.close()
+    logger.info("Database initialized successfully.")
 
 def sync_json_from_db(conn=None):
-    """Keep Backend/products.json synchronized with database."""
+    """Keep Backend/products.json synchronized with database.
+
+    On read-only filesystems (like Render), the write is silently skipped.
+    """
     close_after = False
     if conn is None:
         conn = get_db()
@@ -517,17 +570,26 @@ def sync_json_from_db(conn=None):
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM products ORDER BY id ASC')
     rows = cursor.fetchall()
-    data = [dict(row) for row in rows]
+    # rows are already dicts thanks to dict_row factory
+    data = list(rows)
     try:
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4)
-    except Exception as e:
-        pass
+            json.dump(data, f, indent=4, default=str)
+    except (OSError, IOError) as e:
+        # Read-only filesystem in production — safe to skip
+        logger.debug(f"Could not write products.json (read-only filesystem?): {e}")
     if close_after:
         conn.close()
 
-# Initialize DB on start
-init_db()
+# Initialize DB on start — only when DATABASE_URL is available
+if DATABASE_URL:
+    try:
+        init_db()
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}", exc_info=True)
+        logger.error("The application will start but database operations will fail until DATABASE_URL is correctly configured.")
+else:
+    logger.warning("Skipping database initialization — DATABASE_URL not set.")
 
 # --- Storefront Routes ---
 
@@ -570,22 +632,22 @@ def get_products():
         params = []
 
         if category and category.lower() != 'all':
-            query += ' AND LOWER(category) = LOWER(?)'
+            query += ' AND LOWER(category) = LOWER(%s)'
             params.append(category)
 
         if search:
-            query += ' AND (LOWER(name) LIKE ? OR LOWER(description) LIKE ?)'
+            query += ' AND (LOWER(name) LIKE %s OR LOWER(description) LIKE %s)'
             params.extend([f'%{search}%', f'%{search}%'])
 
         if in_stock_only:
             query += ' AND quantity > 0'
 
         if min_price is not None:
-            query += ' AND price >= ?'
+            query += ' AND price >= %s'
             params.append(min_price)
 
         if max_price is not None:
-            query += ' AND price <= ?'
+            query += ' AND price <= %s'
             params.append(max_price)
 
         if sort_by == 'price_asc':
@@ -593,7 +655,7 @@ def get_products():
         elif sort_by == 'price_desc':
             query += ' ORDER BY price DESC'
         elif sort_by == 'discount':
-            query += ' ORDER BY ((original_price - price) / original_price) DESC'
+            query += ' ORDER BY ((original_price - price) / NULLIF(original_price, 0)) DESC'
         elif sort_by == 'rating':
             query += ' ORDER BY rating DESC'
         elif sort_by == 'name':
@@ -603,7 +665,7 @@ def get_products():
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
-        products = [dict(row) for row in rows]
+        products = list(rows)
         conn.close()
 
         return jsonify(products)
@@ -615,7 +677,7 @@ def get_products():
 def get_product(product_id):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM products WHERE id = ?', (product_id,))
+    cursor.execute('SELECT * FROM products WHERE id = %s', (product_id,))
     row = cursor.fetchone()
     if not row:
         conn.close()
@@ -625,7 +687,7 @@ def get_product(product_id):
 
     cursor.execute('''
         SELECT * FROM products
-        WHERE category = ? AND id != ?
+        WHERE category = %s AND id != %s
         LIMIT 4
     ''', (product['category'], product_id))
     related = [dict(r) for r in cursor.fetchall()]
@@ -656,12 +718,13 @@ def add_product():
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO products (name, category, price, original_price, quantity, rating, rating_count, image, image_url, description)
-        VALUES (?, ?, ?, ?, ?, 4.5, 1, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, 4.5, 1, %s, %s, %s)
+        RETURNING id
     ''', (name, category, price, original_price, quantity, image, image_url, description))
-    new_id = cursor.lastrowid
+    new_id = cursor.fetchone()['id']
     conn.commit()
 
-    cursor.execute('SELECT * FROM products WHERE id = ?', (new_id,))
+    cursor.execute('SELECT * FROM products WHERE id = %s', (new_id,))
     new_product = dict(cursor.fetchone())
     sync_json_from_db(conn)
     conn.close()
@@ -673,7 +736,7 @@ def update_product(product_id):
     data = request.json or {}
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM products WHERE id = ?', (product_id,))
+    cursor.execute('SELECT * FROM products WHERE id = %s', (product_id,))
     existing = cursor.fetchone()
     if not existing:
         conn.close()
@@ -685,17 +748,17 @@ def update_product(product_id):
     price = float(data.get('price', existing['price']))
     original_price = float(data.get('original_price', existing['original_price']))
     description = data.get('description', existing['description'])
-    image_url = data.get('image_url', existing['image_url'] if 'image_url' in existing.keys() else existing['image'])
+    image_url = data.get('image_url', existing.get('image_url') or existing.get('image'))
     image = data.get('image', image_url)
 
     cursor.execute('''
         UPDATE products
-        SET name = ?, category = ?, quantity = ?, price = ?, original_price = ?, description = ?, image = ?, image_url = ?
-        WHERE id = ?
+        SET name = %s, category = %s, quantity = %s, price = %s, original_price = %s, description = %s, image = %s, image_url = %s
+        WHERE id = %s
     ''', (name, category, quantity, price, original_price, description, image, image_url, product_id))
     conn.commit()
 
-    cursor.execute('SELECT * FROM products WHERE id = ?', (product_id,))
+    cursor.execute('SELECT * FROM products WHERE id = %s', (product_id,))
     updated = dict(cursor.fetchone())
     sync_json_from_db(conn)
     conn.close()
@@ -706,7 +769,7 @@ def update_product(product_id):
 def delete_product(product_id):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('DELETE FROM products WHERE id = ?', (product_id,))
+    cursor.execute('DELETE FROM products WHERE id = %s', (product_id,))
     conn.commit()
     sync_json_from_db(conn)
     conn.close()
@@ -728,7 +791,7 @@ def calculate_cart_totals(cart_items, coupon_code=None):
         if req_qty <= 0:
             continue
 
-        cursor.execute('SELECT * FROM products WHERE id = ?', (pid,))
+        cursor.execute('SELECT * FROM products WHERE id = %s', (pid,))
         prod = cursor.fetchone()
         if not prod:
             stock_errors.append(f"Product ID {pid} is no longer available.")
@@ -837,7 +900,7 @@ def api_checkout():
     for item in cart_items:
         pid = item.get('id')
         req_qty = int(item.get('quantity', 1))
-        cursor.execute('SELECT quantity, name FROM products WHERE id = ?', (pid,))
+        cursor.execute('SELECT quantity, name FROM products WHERE id = %s', (pid,))
         row = cursor.fetchone()
         if not row:
             conn.close()
@@ -861,7 +924,7 @@ def api_checkout():
             id, user_id, customer_name, customer_email, customer_phone,
             address, city, state, postal_code, subtotal, discount,
             delivery_fee, total, coupon_code, payment_method, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Confirmed')
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Confirmed')
     ''', (
         order_id, user_id,
         delivery_info['name'].strip(),
@@ -882,15 +945,15 @@ def api_checkout():
     for item in calc['items']:
         cursor.execute('''
             INSERT INTO order_items (order_id, product_id, product_name, unit_price, quantity, total_price)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         ''', (
             order_id, item['id'], item['name'], item['price'], item['quantity'], item['total']
         ))
 
         cursor.execute('''
             UPDATE products
-            SET quantity = quantity - ?
-            WHERE id = ?
+            SET quantity = quantity - %s
+            WHERE id = %s
         ''', (item['quantity'], item['id']))
 
     conn.commit()
@@ -914,11 +977,11 @@ def api_checkout():
         }
     })
 
-# --- Proper User Authentication (Allows any email to log in seamlessly) ---
+# --- User Authentication ---
 
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
-    """Allows instant login with ANY email address; creates account on the fly if needed."""
+    """Login endpoint. Verifies password for existing users."""
     data = request.json or {}
     email = data.get('email', '').strip().lower()
     password = data.get('password', '').strip()
@@ -926,24 +989,21 @@ def api_login():
     if not email:
         return jsonify({'error': 'Please enter your email address.'}), 400
 
+    if not password:
+        return jsonify({'error': 'Please enter your password.'}), 400
+
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+    cursor.execute('SELECT * FROM users WHERE email = %s', (email,))
     user = cursor.fetchone()
 
     if not user:
-        # Generate friendly display name from email (e.g. shraddha.singh@gmail.com -> Shraddha Singh)
-        raw_name = email.split('@')[0]
-        clean_name = ' '.join(part.capitalize() for part in raw_name.replace('.', ' ').replace('_', ' ').split())
-        if not clean_name:
-            clean_name = "Shraddha Singh"
-        pw_hash = generate_password_hash(password or 'easycart123')
-        cursor.execute('INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)', (clean_name, email, pw_hash))
-        user_id = cursor.lastrowid
-        conn.commit()
-        user = {'id': user_id, 'name': clean_name, 'email': email}
-    else:
-        user = dict(user)
+        conn.close()
+        return jsonify({'error': 'No account found with this email. Please register first.'}), 404
+
+    if not check_password_hash(user['password_hash'], password):
+        conn.close()
+        return jsonify({'error': 'Invalid password. Please try again.'}), 401
 
     conn.close()
 
@@ -967,24 +1027,28 @@ def api_register():
     if not email:
         return jsonify({'error': 'Email is required.'}), 400
 
+    if not password:
+        return jsonify({'error': 'Password is required.'}), 400
+
     if not name:
         raw_name = email.split('@')[0]
         name = ' '.join(part.capitalize() for part in raw_name.replace('.', ' ').replace('_', ' ').split())
         if not name:
-            name = "Shraddha Singh"
+            name = "EasyCart User"
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT id FROM users WHERE email = ?', (email,))
+    cursor.execute('SELECT id FROM users WHERE email = %s', (email,))
     existing = cursor.fetchone()
 
     if existing:
-        user_id = existing['id']
-    else:
-        pw_hash = generate_password_hash(password or 'easycart123')
-        cursor.execute('INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)', (name, email, pw_hash))
-        user_id = cursor.lastrowid
-        conn.commit()
+        conn.close()
+        return jsonify({'error': 'An account with this email already exists. Please log in.'}), 409
+
+    pw_hash = generate_password_hash(password)
+    cursor.execute('INSERT INTO users (name, email, password_hash) VALUES (%s, %s, %s) RETURNING id', (name, email, pw_hash))
+    user_id = cursor.fetchone()['id']
+    conn.commit()
 
     conn.close()
 
@@ -1010,7 +1074,7 @@ def api_me():
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT id, name, email, created_at FROM users WHERE id = ?', (user_id,))
+    cursor.execute('SELECT id, name, email, created_at FROM users WHERE id = %s', (user_id,))
     user = cursor.fetchone()
     conn.close()
 
@@ -1033,7 +1097,7 @@ def api_user_orders():
     cursor = conn.cursor()
     cursor.execute('''
         SELECT * FROM orders
-        WHERE user_id = ?
+        WHERE user_id = %s
         ORDER BY created_at DESC
     ''', (user_id,))
     orders = [dict(r) for r in cursor.fetchall()]
@@ -1041,7 +1105,7 @@ def api_user_orders():
     for order in orders:
         cursor.execute('''
             SELECT * FROM order_items
-            WHERE order_id = ?
+            WHERE order_id = %s
         ''', (order['id'],))
         order['items'] = [dict(i) for i in cursor.fetchall()]
 

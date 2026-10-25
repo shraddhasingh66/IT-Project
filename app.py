@@ -21,3 +21,4 @@ init_db = getattr(backend_module, 'init_db', None)
 
 if __name__ == '__main__':
     app.run(debug=True)
+
