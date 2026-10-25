@@ -3,10 +3,20 @@ import sys
 import json
 import random
 import logging
-import psycopg
-from psycopg.rows import dict_row
+import sqlite3
+import re
 from flask import Flask, render_template, jsonify, request, session
 from werkzeug.security import generate_password_hash, check_password_hash
+
+# Try importing psycopg for Supabase PostgreSQL
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+    HAS_PSYCOPG = True
+except ImportError:
+    psycopg = None
+    dict_row = None
+    HAS_PSYCOPG = False
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
@@ -19,27 +29,18 @@ TEMPLATE_DIR = os.path.join(PROJECT_ROOT, 'Frontend')
 STATIC_DIR = os.path.join(PROJECT_ROOT, 'Frontend', 'Style')
 BANNER_DIR = os.path.join(PROJECT_ROOT, 'banner')
 DATA_FILE = os.path.join(BACKEND_DIR, 'products.json')
+SQLITE_DB_FILE = os.path.join(BACKEND_DIR, 'easycart.db')
 
 # ---------------------------------------------------------------------------
-# Database URL — required in production, optional locally for development
+# Database URL — reads from environment; if absent, falls back to SQLite
 # ---------------------------------------------------------------------------
 DATABASE_URL = os.environ.get('DATABASE_URL')
-
-if not DATABASE_URL:
-    logger.warning(
-        "DATABASE_URL environment variable is not set. "
-        "Set it to your Supabase PostgreSQL connection string before deploying."
-    )
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR, static_url_path='/static')
 
 # Secret key — MUST be set via environment variable in production
 _secret = os.environ.get('SECRET_KEY')
 if not _secret:
-    logger.warning(
-        "SECRET_KEY environment variable is not set. "
-        "Using a development-only fallback. Set a strong SECRET_KEY before deploying."
-    )
     _secret = 'easycart-secret-key-2026-development'
 app.secret_key = _secret
 
@@ -53,14 +54,12 @@ def serve_banner(filename):
         logger.error(f"Error serving banner {filename}: {e}")
         abort(404)
 
-
-
 # Predefined Demonstration Coupons
 COUPONS = {
     'WELCOME10': {
         'code': 'WELCOME10',
         'type': 'percentage',
-        'value': 10,  # 10% off
+        'value': 10,
         'min_order': 200,
         'max_discount': 500,
         'description': '10% off on orders above ₹200 (Max discount ₹500)'
@@ -68,7 +67,7 @@ COUPONS = {
     'SAVE50': {
         'code': 'SAVE50',
         'type': 'flat',
-        'value': 50,  # ₹50 off
+        'value': 50,
         'min_order': 499,
         'max_discount': 50,
         'description': 'Flat ₹50 off on orders above ₹499'
@@ -88,7 +87,6 @@ FREE_DELIVERY_THRESHOLD = 999.0
 
 # 25 Products across 8 categories with image_url support and offline fallbacks
 SEED_PRODUCTS = [
-    # Electronics (incorporates legacy items 1 and 2)
     {
         "id": 1,
         "name": "USB-C Multiport Hub",
@@ -141,8 +139,6 @@ SEED_PRODUCTS = [
         "image_url": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80",
         "description": "1.78-inch HD curved display, 24/7 heart rate and blood oxygen monitoring, 100+ sports modes, and 7-day battery."
     },
-
-    # Grocery
     {
         "id": 5,
         "name": "Organic Arabica Coffee Beans (500g)",
@@ -182,8 +178,6 @@ SEED_PRODUCTS = [
         "image_url": "https://storage.googleapis.com/shy-pub/303196/ChatGPTImageMay14202604_04_08PM-1783947728828.png",
         "description": "Crisp, unpasteurized natural almonds vacuum-packed to preserve crunch and rich vitamin E content."
     },
-
-    # Fashion
     {
         "id": 8,
         "name": "Men's Classic Slim-Fit Oxford Shirt",
@@ -223,8 +217,6 @@ SEED_PRODUCTS = [
         "image_url": "https://images.unsplash.com/photo-1511499767150-a48a237f0083?auto=format&fit=crop&w=600&q=80",
         "description": "UV400 scratch-resistant polarized lenses with a lightweight stainless steel alloy frame and silicone nose pads."
     },
-
-    # Home & Kitchen
     {
         "id": 11,
         "name": "Cast Iron Pre-Seasoned Skillet (10-inch)",
@@ -264,8 +256,6 @@ SEED_PRODUCTS = [
         "image_url": "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=600&q=80",
         "description": "Handcrafted matte ceramic base with warm fabric shade, dimmer switch, and energy-efficient warm LED bulb included."
     },
-
-    # Beauty & Personal Care
     {
         "id": 14,
         "name": "Vitamin C + Hyaluronic Acid Glow Serum (30ml)",
@@ -305,8 +295,6 @@ SEED_PRODUCTS = [
         "image_url": "https://m.media-amazon.com/images/I/71CiwYb8itL.jpg",
         "description": "40,000 vibrations/min with 5 tailored modes, 2-minute smart timer, and 30-day wireless charging battery."
     },
-
-    # Books & Stationery
     {
         "id": 17,
         "name": "Classic Hardcover Dotted Journal (A5)",
@@ -346,8 +334,6 @@ SEED_PRODUCTS = [
         "image_url": "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=600&q=80",
         "description": "Transformative guide to building sustainable habits, deep focus, and high performance in everyday professional life."
     },
-
-    # Sports & Fitness
     {
         "id": 20,
         "name": "High-Density Non-Slip Yoga Mat (6mm)",
@@ -387,8 +373,6 @@ SEED_PRODUCTS = [
         "image_url": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=600&q=80",
         "description": "Double-wall vacuum insulation keeps drinks chilled for 24 hours or piping hot for 12 hours. Sweat-proof powder finish."
     },
-
-    # Toys & Accessories
     {
         "id": 23,
         "name": "Magnetic STEM Building Tiles Set (64 Pcs)",
@@ -431,138 +415,243 @@ SEED_PRODUCTS = [
 ]
 
 # ---------------------------------------------------------------------------
-# PostgreSQL connection helper
+# SQLite Compatibility Wrapper (translates standard %s queries & dict rows)
+# ---------------------------------------------------------------------------
+class SQLiteCursorWrapper:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def execute(self, query, params=None):
+        sqlite_query = re.sub(r'%s', '?', query)
+        if params is None:
+            return self._cursor.execute(sqlite_query)
+        return self._cursor.execute(sqlite_query, params)
+
+    def fetchone(self):
+        row = self._cursor.fetchone()
+        return dict(row) if row is not None else None
+
+    def fetchall(self):
+        return [dict(r) for r in self._cursor.fetchall()]
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+class SQLiteConnWrapper:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def cursor(self):
+        return SQLiteCursorWrapper(self._conn.cursor())
+
+    def commit(self):
+        return self._conn.commit()
+
+    def rollback(self):
+        return self._conn.rollback()
+
+    def close(self):
+        return self._conn.close()
+
+# ---------------------------------------------------------------------------
+# Unified Database Connection Helper
 # ---------------------------------------------------------------------------
 def get_db():
-    """Return a psycopg connection with dict_row factory.
+    """Return a database connection with dict-like row access.
 
-    Uses the DATABASE_URL environment variable. Supabase direct connections
-    require SSL, so sslmode=require is enforced unless the URL already
-    contains an sslmode parameter.
+    If DATABASE_URL is set (e.g. on Render with Supabase PostgreSQL),
+    connects via psycopg. If not set, falls back seamlessly to local SQLite.
     """
     db_url = os.environ.get('DATABASE_URL')
-    if not db_url:
-        raise RuntimeError(
-            "DATABASE_URL environment variable is not configured. "
-            "Set it to your Supabase PostgreSQL connection string."
-        )
-    # Ensure SSL is enabled for Supabase (add sslmode=require if missing)
-    if 'sslmode' not in db_url:
-        separator = '&' if '?' in db_url else '?'
-        db_url += f'{separator}sslmode=require'
-    conn = psycopg.connect(db_url, row_factory=dict_row)
-    return conn
+    if db_url and HAS_PSYCOPG:
+        if 'sslmode' not in db_url:
+            separator = '&' if '?' in db_url else '?'
+            db_url += f'{separator}sslmode=require'
+        return psycopg.connect(db_url, row_factory=dict_row)
+    else:
+        conn = sqlite3.connect(SQLITE_DB_FILE)
+        conn.row_factory = sqlite3.Row
+        return SQLiteConnWrapper(conn)
 
 # ---------------------------------------------------------------------------
-# Schema initialization — safe for repeated calls (idempotent)
+# Schema Initialization — Idempotent & Works on both Postgres & SQLite
 # ---------------------------------------------------------------------------
 def init_db():
     """Create tables if they don't exist, run safe migrations, and seed data."""
+    is_postgres = bool(os.environ.get('DATABASE_URL') and HAS_PSYCOPG)
     conn = get_db()
     cursor = conn.cursor()
 
-    # Products Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS products (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            category TEXT NOT NULL DEFAULT 'Electronics',
-            price DOUBLE PRECISION NOT NULL,
-            original_price DOUBLE PRECISION,
-            quantity INTEGER NOT NULL DEFAULT 0,
-            rating DOUBLE PRECISION DEFAULT 4.5,
-            rating_count INTEGER DEFAULT 50,
-            image TEXT,
-            image_url TEXT,
-            description TEXT
-        )
-    ''')
-
-    # Migration: Ensure image_url column exists if table was created previously
-    # PostgreSQL-compatible: check information_schema before ALTER
-    cursor.execute("""
-        SELECT column_name FROM information_schema.columns
-        WHERE table_name = 'products' AND column_name = 'image_url'
-    """)
-    if not cursor.fetchone():
-        cursor.execute("ALTER TABLE products ADD COLUMN image_url TEXT")
-
-    # Users Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # Orders Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS orders (
-            id TEXT PRIMARY KEY,
-            user_id INTEGER,
-            customer_name TEXT NOT NULL,
-            customer_email TEXT NOT NULL,
-            customer_phone TEXT,
-            address TEXT NOT NULL,
-            city TEXT NOT NULL,
-            state TEXT NOT NULL,
-            postal_code TEXT NOT NULL,
-            subtotal DOUBLE PRECISION NOT NULL,
-            discount DOUBLE PRECISION NOT NULL DEFAULT 0,
-            delivery_fee DOUBLE PRECISION NOT NULL DEFAULT 0,
-            total DOUBLE PRECISION NOT NULL,
-            coupon_code TEXT,
-            payment_method TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'Confirmed',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
-
-    # Order Items Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS order_items (
-            id SERIAL PRIMARY KEY,
-            order_id TEXT NOT NULL,
-            product_id INTEGER NOT NULL,
-            product_name TEXT NOT NULL,
-            unit_price DOUBLE PRECISION NOT NULL,
-            quantity INTEGER NOT NULL,
-            total_price DOUBLE PRECISION NOT NULL,
-            FOREIGN KEY (order_id) REFERENCES orders (id)
-        )
-    ''')
-
-    conn.commit()
-
-    # Seed products safely — ON CONFLICT preserves admin-edited rows
-    for p in SEED_PRODUCTS:
-        img_url = p.get('image_url') or p.get('image')
+    if is_postgres:
         cursor.execute('''
-            INSERT INTO products (id, name, category, price, original_price, quantity, rating, rating_count, image, image_url, description)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO NOTHING
-        ''', (
-            p['id'], p['name'], p['category'], p['price'], p['original_price'],
-            p['quantity'], p['rating'], p['rating_count'], p.get('image', img_url), img_url, p['description']
-        ))
+            CREATE TABLE IF NOT EXISTS products (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'Electronics',
+                price DOUBLE PRECISION NOT NULL,
+                original_price DOUBLE PRECISION,
+                quantity INTEGER NOT NULL DEFAULT 0,
+                rating DOUBLE PRECISION DEFAULT 4.5,
+                rating_count INTEGER DEFAULT 50,
+                image TEXT,
+                image_url TEXT,
+                description TEXT
+            )
+        ''')
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'products' AND column_name = 'image_url'
+        """)
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE products ADD COLUMN image_url TEXT")
 
-    # Ensure the serial sequence is ahead of our hardcoded IDs
-    cursor.execute("SELECT setval(pg_get_serial_sequence('products', 'id'), GREATEST((SELECT MAX(id) FROM products), 1))")
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
-    conn.commit()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS orders (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER,
+                customer_name TEXT NOT NULL,
+                customer_email TEXT NOT NULL,
+                customer_phone TEXT,
+                address TEXT NOT NULL,
+                city TEXT NOT NULL,
+                state TEXT NOT NULL,
+                postal_code TEXT NOT NULL,
+                subtotal DOUBLE PRECISION NOT NULL,
+                discount DOUBLE PRECISION NOT NULL DEFAULT 0,
+                delivery_fee DOUBLE PRECISION NOT NULL DEFAULT 0,
+                total DOUBLE PRECISION NOT NULL,
+                coupon_code TEXT,
+                payment_method TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Confirmed',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS order_items (
+                id SERIAL PRIMARY KEY,
+                order_id TEXT NOT NULL,
+                product_id INTEGER NOT NULL,
+                product_name TEXT NOT NULL,
+                unit_price DOUBLE PRECISION NOT NULL,
+                quantity INTEGER NOT NULL,
+                total_price DOUBLE PRECISION NOT NULL,
+                FOREIGN KEY (order_id) REFERENCES orders (id)
+            )
+        ''')
+        conn.commit()
+
+        for p in SEED_PRODUCTS:
+            img_url = p.get('image_url') or p.get('image')
+            cursor.execute('''
+                INSERT INTO products (id, name, category, price, original_price, quantity, rating, rating_count, image, image_url, description)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO NOTHING
+            ''', (
+                p['id'], p['name'], p['category'], p['price'], p['original_price'],
+                p['quantity'], p['rating'], p['rating_count'], p.get('image', img_url), img_url, p['description']
+            ))
+
+        cursor.execute("SELECT setval(pg_get_serial_sequence('products', 'id'), GREATEST((SELECT MAX(id) FROM products), 1))")
+        conn.commit()
+    else:
+        # SQLite Initialization
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'Electronics',
+                price REAL NOT NULL,
+                original_price REAL,
+                quantity INTEGER NOT NULL DEFAULT 0,
+                rating REAL DEFAULT 4.5,
+                rating_count INTEGER DEFAULT 50,
+                image TEXT,
+                image_url TEXT,
+                description TEXT
+            )
+        ''')
+        try:
+            cursor.execute("ALTER TABLE products ADD COLUMN image_url TEXT")
+        except Exception:
+            pass
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS orders (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER,
+                customer_name TEXT NOT NULL,
+                customer_email TEXT NOT NULL,
+                customer_phone TEXT,
+                address TEXT NOT NULL,
+                city TEXT NOT NULL,
+                state TEXT NOT NULL,
+                postal_code TEXT NOT NULL,
+                subtotal REAL NOT NULL,
+                discount REAL NOT NULL DEFAULT 0,
+                delivery_fee REAL NOT NULL DEFAULT 0,
+                total REAL NOT NULL,
+                coupon_code TEXT,
+                payment_method TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Confirmed',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS order_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id TEXT NOT NULL,
+                product_id INTEGER NOT NULL,
+                product_name TEXT NOT NULL,
+                unit_price REAL NOT NULL,
+                quantity INTEGER NOT NULL,
+                total_price REAL NOT NULL,
+                FOREIGN KEY (order_id) REFERENCES orders (id)
+            )
+        ''')
+        conn.commit()
+
+        for p in SEED_PRODUCTS:
+            img_url = p.get('image_url') or p.get('image')
+            cursor.execute('''
+                INSERT INTO products (id, name, category, price, original_price, quantity, rating, rating_count, image, image_url, description)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO NOTHING
+            ''', (
+                p['id'], p['name'], p['category'], p['price'], p['original_price'],
+                p['quantity'], p['rating'], p['rating_count'], p.get('image', img_url), img_url, p['description']
+            ))
+        conn.commit()
+
     sync_json_from_db(conn)
     conn.close()
     logger.info("Database initialized successfully.")
 
 def sync_json_from_db(conn=None):
-    """Keep Backend/products.json synchronized with database.
-
-    On read-only filesystems (like Render), the write is silently skipped.
-    """
+    """Keep Backend/products.json synchronized with database."""
     close_after = False
     if conn is None:
         conn = get_db()
@@ -570,26 +659,20 @@ def sync_json_from_db(conn=None):
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM products ORDER BY id ASC')
     rows = cursor.fetchall()
-    # rows are already dicts thanks to dict_row factory
     data = list(rows)
     try:
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4, default=str)
     except (OSError, IOError) as e:
-        # Read-only filesystem in production — safe to skip
-        logger.debug(f"Could not write products.json (read-only filesystem?): {e}")
+        logger.debug(f"Could not write products.json: {e}")
     if close_after:
         conn.close()
 
-# Initialize DB on start — only when DATABASE_URL is available
-if DATABASE_URL:
-    try:
-        init_db()
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}", exc_info=True)
-        logger.error("The application will start but database operations will fail until DATABASE_URL is correctly configured.")
-else:
-    logger.warning("Skipping database initialization — DATABASE_URL not set.")
+# Auto-initialize database on application launch
+try:
+    init_db()
+except Exception as e:
+    logger.error(f"Error during database initialization: {e}", exc_info=True)
 
 # --- Storefront Routes ---
 

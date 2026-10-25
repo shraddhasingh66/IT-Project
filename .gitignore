@@ -32,3 +32,17 @@ Thumbs.db
 # Logs
 *.log
 
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Local SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
