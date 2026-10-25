@@ -4,7 +4,7 @@ An online shopping web platform built with Python, Flask, SQLite, and vanilla HT
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
 1. **Product Discovery & Catalogue**:
    - 8 product categories: *Electronics, Grocery, Fashion, Home & Kitchen, Beauty & Personal Care, Books & Stationery, Sports & Fitness, Toys & Accessories*.
@@ -40,12 +40,12 @@ An online shopping web platform built with Python, Flask, SQLite, and vanilla HT
 
 ---
 
-## 🚀 Quickstart for Windows & VS Code
+##  Quickstart for Windows & VS Code
 
 ### 1. Open Project in VS Code
 Open VS Code, press `Ctrl+O` (or `File -> Open Folder...`), and select:
 ```text
-C:\Users\suvro\Downloads\Inventory and shopping cart Manager
+C:\Users\shraddha\Downloads\Inventory and shopping cart Manager
 ```
 
 ### 2. Verify or Install Dependencies
@@ -76,7 +76,7 @@ http://127.0.0.1:5000/
 
 ---
 
-## 🧪 Demonstration Credentials & Coupons
+## Demonstration Credentials & Coupons
 
 - **Coupons**:
   - `WELCOME10` — 10% discount on orders $\ge ₹200$.
@@ -87,7 +87,7 @@ http://127.0.0.1:5000/
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 Inventory and shopping cart Manager/
